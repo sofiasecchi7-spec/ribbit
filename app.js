@@ -14,8 +14,17 @@
   let count = 0; // set from the project's last row when it is opened (see openProject)
 
   // Projects: { id, name, updatedAt, entries, colors, color? }. The current project's `entries` array is the dots
-  // pile (one count per row); `colors` runs alongside it (each row's dot colour, fixed when the row is entered);
+  // pile (one count per row); `colors` runs alongside it (each row's dot colour, fixed when the row is entered — a
+  // hex string, or an array with one hex per square once part of the row has been recoloured through a selection);
   // `color` is the colour for new rows. Every change is saved automatically.
+  const isHex = (c) => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
+
+  // A row's colours, one per square (from either form of `colors[i]`).
+  const squareColors = (color, n) => (Array.isArray(color) ? color.slice() : Array(n).fill(color));
+
+  // Back to the compact form: one string when every square has the same colour.
+  const packColors = (list) => (list.every((c) => c === list[0]) ? list[0] : list);
+
   let projects = loadProjects();
   let current = projects.find((p) => p.id === localStorage.getItem(CURRENT_KEY)) || projects[0];
   let entries = current.entries;
@@ -41,11 +50,13 @@
   }
 
   // Drop invalid rows (keeping each row's colour with it); rows saved before per-row colours existed get the colour
-  // they were showing — the project's colour at the time.
+  // they were showing — the project's colour at the time. Per-square colours must match the row's length.
   function cleanProject(p) {
-    const isHex = (c) => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
+    const fallback = isHex(p.color) ? p.color : DEFAULT_DOT;
     const rows = p.entries.map((n, i) => [n, Array.isArray(p.colors) ? p.colors[i] : null]).filter(([n]) => isCount(n));
-    return { ...p, entries: rows.map(([n]) => n), colors: rows.map(([, c]) => (isHex(c) ? c : p.color || DEFAULT_DOT)) };
+    const color = (c, n) =>
+      isHex(c) ? c : Array.isArray(c) && c.length === n && c.every(isHex) ? packColors(c) : fallback;
+    return { ...p, entries: rows.map(([n]) => n), colors: rows.map(([n, c]) => color(c, n)) };
   }
 
   function loadProjects() {
@@ -91,10 +102,10 @@
     const newestFirst = entries.slice().reverse();
     rowsEl.replaceChildren(
       ...newestFirst.map((n, rowIndex) => {
-        const row = buildRow(n);
+        const index = entries.length - 1 - rowIndex; // position in `entries`
+        const row = buildRow(n, current.colors[index]); // the colour(s) it was entered with, or recoloured to
         if (animateLast && rowIndex === 0) row.classList.add("row--new");
-        row.dataset.index = entries.length - 1 - rowIndex; // position in `entries`
-        row.style.setProperty("--dot", current.colors[row.dataset.index]); // the colour it was entered with
+        row.dataset.index = index;
         // Group marker on the bottom row of each run of equal rows: a line beside the run and "squares x rows".
         if (n !== newestFirst[rowIndex + 1]) {
           let k = 1;
@@ -136,15 +147,17 @@
     return mark;
   }
 
-  // One row of n dots.
-  function buildRow(n) {
+  // One row of n dots in `color`: a hex for the whole row, or one per square.
+  function buildRow(n, color) {
     const row = document.createElement("div");
     row.className = "row";
     row.style.setProperty("--n", n);
+    if (!Array.isArray(color)) row.style.setProperty("--dot", color);
     for (let i = 0; i < n; i++) {
       const dot = document.createElement("span");
       dot.className = "dot";
       dot.style.setProperty("--i", i);
+      if (Array.isArray(color)) dot.style.setProperty("--dot", color[i]);
       row.appendChild(dot);
     }
     return row;
@@ -358,7 +371,7 @@
     if (e.deltaY > 0 && entries.length > 0) openHistory();
   }, { passive: false });
 
-  document.getElementById("done").addEventListener("click", closeHistory);
+  document.getElementById("done").addEventListener("click", () => (isSelecting() ? clearSelection() : closeHistory()));
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (isPicking()) closePicker();
@@ -613,10 +626,14 @@
     return bestDist <= 12 ? best : null;
   }
 
+  // While selecting, the round × at the top centre (history mode's close button) cancels the selection instead.
+  const doneBtn = document.getElementById("done");
+
   function selectRow(row) {
     selectedIndex = Number(row.dataset.index);
     for (const r of rowsEl.children) r.classList.toggle("is-selected", r === row);
     document.body.classList.add("is-selecting");
+    doneBtn.setAttribute("aria-label", "Cancel selection");
     openEditor();
   }
 
@@ -624,12 +641,13 @@
     selectedIndex = null;
     rowsEl.querySelector(".is-selected")?.classList.remove("is-selected");
     document.body.classList.remove("is-selecting");
+    doneBtn.setAttribute("aria-label", "Close history");
     closeEditor();
   }
 
   // Selection (row editor): a cream card behind the selected squares, drawn exactly over where they are in the strip
-  // (same size). The rows stay in the strip underneath; squares are only included or excluded, never changed (Delete
-  // is the one action so far). The selection is a band of rows (r1..r2, display order: 0 = newest, top) and a band
+  // (same size). The rows stay in the strip underneath; the grips only include or exclude squares. Actions on the
+  // selection (bottom right, while selecting): recolour (opens the colour picker) and delete. The selection is a band of rows (r1..r2, display order: 0 = newest, top) and a band
   // of columns: rows are centred on one axis, so a square's place is its centre's offset from that axis, and a square
   // is selected when that offset is within e1..e2. Side grips move e1/e2 a square (20px) at a time — one square more or
   // fewer in every selected row, whatever its length — and top/bottom grips add or drop a row (24px), within the rows
@@ -682,7 +700,7 @@
       const range = row && rowRange(rowCount(row));
       if (!range) continue;
       const x = row.offsetLeft + range[0] * PITCH;
-      parts.push({ d, row, range, left: x, right: x + groupWidth(...range), top: row.offsetTop });
+      parts.push({ d, row, index: Number(row.dataset.index), range, left: x, right: x + groupWidth(...range), top: row.offsetTop });
     }
     return parts;
   }
@@ -713,10 +731,11 @@
         const strip = document.createElement("div");
         strip.className = "row-editor__squares";
         Object.assign(strip.style, { left: px(p.left), top: px(p.top) });
-        strip.style.setProperty("--dot", current.colors[p.row.dataset.index]);
+        const colors = squareColors(current.colors[p.index], entries[p.index]);
         for (let i = p.range[0]; i <= p.range[1]; i++) {
           const dot = document.createElement("span");
           dot.className = "dot";
+          dot.style.setProperty("--dot", colors[i]);
           strip.appendChild(dot);
         }
         return strip;
@@ -738,6 +757,11 @@
       grip("right", right + CARD_PAD, edgeMidY((p) => p.right === right));
       grip("top", (first.left + first.right) / 2, first.top - CARD_PAD_Y);
       grip("bottom", (last.left + last.right) / 2, last.top + 12 + CARD_PAD_Y);
+    }
+    // The colour button (bottom right) shows the selection's colour: its first square's.
+    if (parts.length) {
+      const first = parts[0];
+      document.body.style.setProperty("--selection", squareColors(current.colors[first.index], entries[first.index])[first.range[0]]);
     }
     placeEditor();
   }
@@ -820,18 +844,22 @@
   scrollerEl.addEventListener("scroll", placeEditor);
   window.addEventListener("resize", placeEditor);
 
-  // Delete removes the selected squares from each selected row (a row with none left is removed).
+  // Delete removes the selected squares from each selected row (a row with none left is removed); the other squares
+  // keep their own colours.
   function deleteSelected() {
     if (!isSelecting()) return;
     const cuts = editor
-      ? selectedParts().map((p) => ({ index: Number(p.row.dataset.index), count: p.range[1] - p.range[0] + 1 }))
-      : [{ index: selectedIndex, count: entries[selectedIndex] }];
-    for (const { index, count } of cuts.sort((x, y) => y.index - x.index)) {
-      if (count >= entries[index]) {
+      ? selectedParts().map((p) => ({ index: p.index, range: p.range }))
+      : [{ index: selectedIndex, range: [0, entries[selectedIndex] - 1] }];
+    for (const { index, range } of cuts.sort((x, y) => y.index - x.index)) {
+      const colors = squareColors(current.colors[index], entries[index]);
+      colors.splice(range[0], range[1] - range[0] + 1);
+      if (colors.length === 0) {
         entries.splice(index, 1);
         current.colors.splice(index, 1);
       } else {
-        entries[index] -= count;
+        entries[index] = colors.length;
+        current.colors[index] = packColors(colors);
       }
     }
     saveEntries();
@@ -841,6 +869,19 @@
       if (entries.length === 0) closeHistory();
       else animateTo(openHeight());
     }
+  }
+
+  // Recolour the selected squares (live, from the colour picker): the rows' own dots and the card's copies.
+  function colorSelection(hex) {
+    for (const p of selectedParts()) {
+      const colors = squareColors(current.colors[p.index], entries[p.index]);
+      for (let i = p.range[0]; i <= p.range[1]; i++) colors[i] = hex;
+      current.colors[p.index] = packColors(colors);
+      const dots = p.row.querySelectorAll(".dot");
+      p.row.style.removeProperty("--dot");
+      colors.forEach((c, i) => dots[i].style.setProperty("--dot", c));
+    }
+    renderGroup();
   }
 
   dotsEl.addEventListener("pointerdown", (e) => {
@@ -870,8 +911,7 @@
     });
   }
 
-  document.getElementById("delete-row").addEventListener("click", deleteSelected);
-  document.getElementById("cancel-select").addEventListener("click", clearSelection);
+  document.getElementById("select-delete").addEventListener("click", deleteSelected);
 
   // Projects UI. The app opens on Home: a loose pile of project balls (newest at the bottom, resting on the +
   // button). Tap a ball to open that project's counter, long-press it to select it for deletion, + starts a new
@@ -1044,9 +1084,9 @@
     preview.append(
       ...rows.slice(start, start + shown).map((n, j) => {
         const cut = n > maxDots ? maxDots + ((n - maxDots) % 2) : n;
-        const row = buildRow(cut);
-        row.style.setProperty("--dot", project.colors[rows.length - 1 - (start + j)]);
-        return row;
+        const color = project.colors[rows.length - 1 - (start + j)];
+        const skip = (n - cut) / 2; // a cut row shows its middle squares
+        return buildRow(cut, Array.isArray(color) ? color.slice(skip, skip + cut) : color);
       })
     );
     preview.appendChild(ballBand());
@@ -1329,6 +1369,7 @@
   const hueThumb = document.getElementById("picker-hue-thumb");
   const swatchesEl = document.getElementById("picker-swatches");
   const usedEl = document.getElementById("picker-used"); // "In this project:" + the swatches
+  const selectColor = document.getElementById("select-color");
   const isPicking = () => document.body.classList.contains("is-picking");
   let hsv = { h: 0, s: 0, v: 0 };
 
@@ -1361,8 +1402,12 @@
     hueThumb.style.left = `${(hsv.h / 360) * 100}%`;
     svEl.setAttribute("aria-valuetext", `saturation ${Math.round(hsv.s * 100)}%, brightness ${Math.round(hsv.v * 100)}%`);
     hueEl.setAttribute("aria-valuenow", Math.round(hsv.h));
-    current.color = hex;
-    applyDotColor();
+    if (isSelecting()) {
+      colorSelection(hex); // a selection's colour: only its squares change
+    } else {
+      current.color = hex;
+      applyDotColor();
+    }
     for (const s of swatchesEl.children) {
       const on = s.dataset.color === hex;
       s.classList.toggle("is-selected", on);
@@ -1372,7 +1417,7 @@
 
   // Swatches: the distinct colours of this project's rows, most recently used first. Tapping one picks it.
   function renderSwatches() {
-    const used = [...new Set(current.colors.slice().reverse())];
+    const used = [...new Set(current.colors.slice().reverse().flat())];
     usedEl.hidden = used.length === 0;
     swatchesEl.replaceChildren(
       ...used.map((color) => {
@@ -1397,18 +1442,20 @@
     persistProjects();
   }
 
+  // Opened from the top-right circle it sets the colour for new rows; opened from the selection's colour button
+  // (bottom right) it recolours the selected squares, starting from their colour.
   function openPicker() {
-    clearSelection();
+    const start = isSelecting() ? document.body.style.getPropertyValue("--selection") : current.color || DEFAULT_DOT;
     renderSwatches();
-    hsv = hexToHsv(current.color || DEFAULT_DOT);
-    renderPicker(current.color || DEFAULT_DOT);
+    hsv = hexToHsv(start);
+    renderPicker(start);
     document.body.classList.add("is-picking");
-    colorOpen.setAttribute("aria-expanded", "true");
+    for (const b of [colorOpen, selectColor]) b.setAttribute("aria-expanded", "true");
   }
 
   function closePicker() {
     document.body.classList.remove("is-picking");
-    colorOpen.setAttribute("aria-expanded", "false");
+    for (const b of [colorOpen, selectColor]) b.setAttribute("aria-expanded", "false");
   }
 
   const clamp01 = (n) => Math.min(1, Math.max(0, n));
@@ -1460,6 +1507,7 @@
   });
 
   colorOpen.addEventListener("click", () => (isPicking() ? closePicker() : openPicker()));
+  selectColor.addEventListener("click", () => (isPicking() ? closePicker() : openPicker()));
   document.getElementById("picker-backdrop").addEventListener("click", () => closePicker());
 
   document.getElementById("back").addEventListener("click", showHome);

@@ -173,14 +173,15 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
   transition: height 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* The count dims and blurs as the strip is pulled open (--pull goes 0 → 1, set by app.js). */
+/* The count fades away and blurs as the strip is pulled open (--pull goes 0 → 1, set by app.js): fully gone by ~60%
+   of the pull, so nothing shows behind the open history (a dim, blurred number there bothered the eye). */
 /* Safari clips a filter to the element's box once it's on its own layer (the count is, for the drag-follow
    translate), and the box hugs the digits — so the blur showed hard straight edges. Padding wider than the blur's
    reach (~3 × 14px), cancelled by an equal negative margin, gives it room without moving anything. */
 #count {
   padding: 48px;
   margin: -48px;
-  opacity: calc(1 - var(--pull, 0) * 0.75);
+  opacity: max(0, 1 - var(--pull, 0) * 1.6);
   filter: blur(calc(var(--pull, 0) * 14px));
   transition: opacity 0.28s, filter 0.28s, translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -195,11 +196,56 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
 }
 
 .is-history #increment { pointer-events: none; } /* no accidental counting while browsing */
-/* Close (×) bar: hidden (but still laid out, for measuring) outside history mode.
-   Delete/Cancel bar: shown instead of it while a row is selected. */
-.bar--history, .bar--select { visibility: hidden; opacity: 0; transition: opacity 0.2s, visibility 0s 0.2s; }
-.is-history:not(.is-selecting) .bar--history,
-.is-selecting .bar--select { visibility: visible; opacity: 1; transition: opacity 0.2s; }
+/* Close (×) bar: hidden (but still laid out, for measuring) except in history mode, where it closes history, and
+   while rows are selected, where it cancels the selection. */
+.bar--history { visibility: hidden; opacity: 0; transition: opacity 0.2s, visibility 0s 0.2s; }
+.is-history .bar--history,
+.is-selecting .bar--history { visibility: visible; opacity: 1; transition: opacity 0.2s; }
+
+/* Selection actions (top row, only while selecting): flanking the round × at the top centre — a circle in the
+   selection's colour on its left (opens the colour picker for the selected squares) and a red delete button on its
+   right, 48px each with the chunky border. The row spans the screen centred on the ×; the 72px gap is the × plus 12px
+   either side. */
+.select-actions {
+  position: fixed;
+  z-index: 2;
+  top: max(16px, env(safe-area-inset-top));
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 72px;
+  pointer-events: none; /* the row lies over the ×; only the buttons take taps */
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.2s, visibility 0s 0.2s;
+}
+
+.select-actions > * { pointer-events: auto; }
+.is-selecting .select-actions { visibility: visible; opacity: 1; transition: opacity 0.2s; }
+
+.select-actions__color,
+.select-actions__delete {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--fg);
+  border-bottom-width: 3px;
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.select-actions__color { background: var(--selection, var(--dot)); }
+.select-actions__delete { background: var(--danger); border-color: var(--danger-dark); }
+.select-actions__delete img { display: block; }
+.select-actions__color:active,
+.select-actions__delete:active { border-bottom-width: 1px; transform: translateY(2px); }
+.select-actions__color:focus-visible,
+.select-actions__delete:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 
 /* Row selection (long-press): the selected squares pop out into the row editor (below); the row itself, and all
    the other rows, stay as they are underneath. */
@@ -244,13 +290,13 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
   pointer-events: none;
 }
 
-/* Grips: a short brown bar on the card's edge — upright on the sides, flat on the top and bottom — centred on a 44px
-   touch area. */
+/* Grips: a free-standing knob just outside each edge of the card — a cream disc with a brown dot and its own shadow,
+   so it reads the same over the card, the parchment or neighbouring rows of squares — on a 44px touch area. */
 .row-editor__grip {
   position: absolute;
   width: 44px;
   height: 44px;
-  margin: -22px 0 0 -22px; /* app.js gives the bar's centre */
+  margin: -22px 0 0 -22px; /* app.js gives the point on the card's edge */
   pointer-events: auto;
   touch-action: none; /* drags move the selection's edge, never scroll the strip */
   -webkit-user-select: none;
@@ -267,26 +313,26 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 3px;
-  height: 12px;
-  margin: -6px 0 0 -1.5px;
-  border-radius: 2px;
-  background: var(--fg);
+  /* 14px knob centred GRIP_OUT (10px) outside the card's edge, leaving a 3px gap to it. */
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--fg) 0 3px, var(--cream) 3.5px);
+  box-shadow: 0 0 0 1px rgba(92, 83, 72, 0.3), 0 2px 4px rgba(92, 83, 72, 0.35);
 }
 
-.row-editor__grip--top::after,
-.row-editor__grip--bottom::after { width: 12px; height: 3px; margin: -1.5px 0 0 -6px; }
-
 /* Each touch area reaches outward from the card (36px out, 8px in), so the four never overlap — even on a selection
-   one row tall or one square wide, where centred areas covered each other's bars. The bar stays on the edge. */
+   one row tall or one square wide, where centred areas covered each other's knobs. app.js gives the point on the
+   card's edge; the knob sits 10px further out (36 − 10 = 26px, 8 + 10 = 18px into the touch area). */
 .row-editor__grip--left { margin: -22px 0 0 -36px; }
-.row-editor__grip--left::after { left: 36px; }
+.row-editor__grip--left::after { left: 26px; }
 .row-editor__grip--right { margin: -22px 0 0 -8px; }
-.row-editor__grip--right::after { left: 8px; }
+.row-editor__grip--right::after { left: 18px; }
 .row-editor__grip--top { margin: -36px 0 0 -22px; }
-.row-editor__grip--top::after { top: 36px; }
+.row-editor__grip--top::after { top: 26px; }
 .row-editor__grip--bottom { margin: -8px 0 0 -22px; }
-.row-editor__grip--bottom::after { top: 8px; }
+.row-editor__grip--bottom::after { top: 18px; }
 
 /* Each "dot" is a 12px square with softly rounded corners (used everywhere: strip, history, ball previews). */
 .dot {
@@ -309,7 +355,7 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
   position: fixed;
   left: 0;
   right: 0;
-  top: max(24px, env(safe-area-inset-top));
+  top: max(16px, env(safe-area-inset-top));
   z-index: 2;
   display: flex;
   justify-content: center;
@@ -343,7 +389,7 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
 /* Floating pills on the main screen: round back button (top left), project title (top centre). */
 .pill {
   position: fixed;
-  top: max(24px, env(safe-area-inset-top));
+  top: max(16px, env(safe-area-inset-top));
   z-index: 2;
   height: 48px;
   display: flex;
@@ -399,7 +445,7 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
 
 .pill:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 
-/* The pills give way to the close × (history) and Cancel/Delete (row selected). */
+/* The pills give way to the round × (history, or rows selected). */
 .is-history .pill,
 .is-selecting .pill { opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0s 0.2s; }
 
@@ -439,7 +485,7 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
   padding:
     max(16px, env(safe-area-inset-top))
     max(var(--pad-x), env(safe-area-inset-right))
-    max(48px, env(safe-area-inset-bottom))
+    max(16px, env(safe-area-inset-bottom))
     max(var(--pad-x), env(safe-area-inset-left));
   /* The rename screen's blue (#7fa8c9) rising from the bottom: 55% at the bottom edge (a bit stronger than the 39%
      that shows above the keyboard when renaming), easing out (∝ distance², like Figma's progressive blur) by 62% of
@@ -481,7 +527,7 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
   inset:
     0
     calc(-1 * max(var(--pad-x), env(safe-area-inset-right)))
-    calc(-1 * max(48px, env(safe-area-inset-bottom)))
+    calc(-1 * max(16px, env(safe-area-inset-bottom)))
     calc(-1 * max(var(--pad-x), env(safe-area-inset-left)));
   overflow-x: hidden;
   overflow-y: auto;
@@ -734,7 +780,7 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
 
 .picker__card {
   position: absolute;
-  top: calc(max(24px, env(safe-area-inset-top)) + 48px + 12px);
+  top: calc(max(16px, env(safe-area-inset-top)) + 48px + 12px);
   right: max(16px, env(safe-area-inset-right));
   left: max(16px, env(safe-area-inset-left)); /* full page width, same 16px gutter as the pills */
   display: flex;

@@ -38,7 +38,8 @@
     </div>
   </div>
 
-  <!-- Only shown in history mode (kept in the layout so app.js can measure where the open strip stops). -->
+  <!-- Round × at the top centre: shown in history mode (closes it) and while rows are selected (cancels the selection).
+       Always kept in the layout so app.js can measure where the open strip stops. -->
   <!-- Floating pills (default view): back to Home (top left), a solid circle in the dot colour (top right, opens the colour picker), and the
        current project's title (top centre, tap to rename). -->
   <button class="pill pill--round" id="back" type="button" aria-label="Home">
@@ -53,10 +54,13 @@
     </button>
   </div>
 
-  <!-- Shown while a row is selected (long-press a row). -->
-  <div class="bar bar--select">
-    <button class="chip" id="cancel-select" type="button">Cancel</button>
-    <button class="chip chip--danger" id="delete-row" type="button">Delete</button>
+  <!-- Actions on a selection (long-press a row), either side of the round × at the top while selecting: recolour the
+       selected squares (a circle in their colour; opens the colour picker) and delete them. The × cancels. -->
+  <div class="select-actions">
+    <button class="select-actions__color" id="select-color" type="button" aria-label="Colour of selected squares" aria-expanded="false" aria-controls="color-picker"></button>
+    <button class="select-actions__delete" id="select-delete" type="button" aria-label="Delete selected squares">
+      <img src="icons/trash.svg" width="24" height="24" alt="">
+    </button>
   </div>
 
   <!-- Colour picker (tap the dot-colour circle): a saturation/brightness gradient panel, a hue strip and swatches of

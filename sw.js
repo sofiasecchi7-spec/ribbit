@@ -13,6 +13,7 @@ const SHELL = [
   "icons/x.svg",
   "icons/check.svg",
   "icons/more.svg",
+  "icons/trash.svg",
   "icons/icon-192.png",
   "icons/apple-touch-icon.png",
 ];
