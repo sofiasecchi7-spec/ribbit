@@ -429,6 +429,7 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
    + button at the bottom. It covers the counter and fades away when a project is opened. */
 .home {
   --pad-x: 32px;
+  --title-mid: 41px; /* half the title's line box (Sigmar 50px): the backup button sits level with it */
   position: fixed;
   inset: 0;
   z-index: 3;
@@ -581,6 +582,52 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
 
 .home__select { visibility: hidden; opacity: 0; transition: opacity 0.2s, visibility 0s 0.2s; }
 .home.is-selecting .home__select { visibility: visible; opacity: 1; transition: opacity 0.2s; }
+
+/* Backup menu: a small round button at the top right, level with the title, opening a cream card under it (same
+   look as the colour picker's card). Hidden while a ball is selected. */
+.home__more {
+  position: absolute;
+  z-index: 1;
+  top: calc(max(16px, env(safe-area-inset-top)) + var(--title-mid) - 24px);
+  right: max(16px, env(safe-area-inset-right));
+  transition: opacity 0.2s;
+}
+
+.home.is-selecting .home__more { opacity: 0; visibility: hidden; }
+
+.home__menu { position: absolute; inset: 0; z-index: 2; visibility: hidden; transition: visibility 0s 0.2s; }
+.home.is-menu .home__menu { visibility: visible; transition: none; }
+.home__menu-backdrop { position: absolute; inset: 0; }
+
+.home__menu-card {
+  position: absolute;
+  top: calc(max(16px, env(safe-area-inset-top)) + var(--title-mid) + 24px + 12px);
+  right: max(16px, env(safe-area-inset-right));
+  width: min(280px, calc(100% - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--fg);
+  border-bottom-width: 3px;
+  border-radius: 24px;
+  background: var(--cream);
+  transform-origin: calc(100% - 24px) 0;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.2s, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.home.is-menu .home__menu-card { opacity: 1; transform: none; }
+.home__menu-card .chip { width: 100%; }
+
+.home__menu-note {
+  margin: 4px 8px 2px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg);
+  text-align: center;
+}
 
 /* Rename (Figma node 121:4266): an opaque layer over the counter holding the question and the name field, kept
    16px above the on-screen keyboard (--kb is the keyboard height, set by app.js from visualViewport).

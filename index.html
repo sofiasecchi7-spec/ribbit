@@ -4,7 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f4ebd9">
-  <title>Counter</title>
+  <title>Ribbit</title>
+  <!-- Installable: Add to Home Screen opens it full screen, without the browser bars (manifest for Android/Chrome,
+       the apple-* tags for iPhone). sw.js keeps a copy so it opens offline. -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Ribbit">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body class="is-home"><!-- the app opens on Home (no fade on load) -->
@@ -95,6 +104,19 @@
       <button class="icon-button home__new" id="new-project" type="button" aria-label="New project">
         <img src="icons/plus.svg" width="56" height="56" alt="">
       </button>
+    </div>
+    <!-- Backup menu (top right): save all projects to a file, or load them back from one. -->
+    <button class="icon-button-small home__more" id="home-more" type="button" aria-label="Backup" aria-expanded="false" aria-controls="home-menu">
+      <img src="icons/more.svg" width="24" height="24" alt="">
+    </button>
+    <div class="home__menu" id="home-menu">
+      <div class="home__menu-backdrop" id="home-menu-backdrop"></div>
+      <div class="home__menu-card" role="group" aria-label="Backup">
+        <button class="chip" id="backup" type="button">Back up projects</button>
+        <button class="chip" id="restore" type="button">Restore a backup</button>
+        <p class="home__menu-note" id="backup-note" aria-live="polite"></p>
+        <input id="restore-file" type="file" accept=".json,application/json" hidden>
+      </div>
     </div>
     <!-- Shown while a ball is selected (long-press). -->
     <div class="bar home__select">

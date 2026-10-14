@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- App icon (source for icons/icon-*.png): a project ball with a few rows of dots on Home's parchment-to-blue
+       background. Full bleed and everything inside the central 80% circle, so it also works as a maskable icon. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#7fa8c9" stop-opacity="0.55"/>
+      <stop offset="0.155" stop-color="#7fa8c9" stop-opacity="0.309"/>
+      <stop offset="0.31" stop-color="#7fa8c9" stop-opacity="0.1375"/>
+      <stop offset="0.465" stop-color="#7fa8c9" stop-opacity="0.034"/>
+      <stop offset="0.62" stop-color="#7fa8c9" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="#f4ebd9"/>
+  <rect width="1024" height="1024" fill="url(#sky)"/>
+  <!-- Chunky border: brown disc peeking out more at the bottom, cream face on top. -->
+  <circle cx="512" cy="524" r="352" fill="#5c5348"/>
+  <circle cx="512" cy="506" r="340" fill="#faf4e6"/>
+  <g fill="#5c5348">
+    <g fill="#4a9c3e">
+      <rect x="332" y="296" width="60" height="60" rx="15"/><rect x="432" y="296" width="60" height="60" rx="15"/>
+      <rect x="532" y="296" width="60" height="60" rx="15"/><rect x="632" y="296" width="60" height="60" rx="15"/>
+    </g>
+    <rect x="282" y="416" width="60" height="60" rx="15"/><rect x="382" y="416" width="60" height="60" rx="15"/>
+    <rect x="482" y="416" width="60" height="60" rx="15"/><rect x="582" y="416" width="60" height="60" rx="15"/>
+    <rect x="682" y="416" width="60" height="60" rx="15"/>
+    <rect x="282" y="536" width="60" height="60" rx="15"/><rect x="382" y="536" width="60" height="60" rx="15"/>
+    <rect x="482" y="536" width="60" height="60" rx="15"/><rect x="582" y="536" width="60" height="60" rx="15"/>
+    <rect x="682" y="536" width="60" height="60" rx="15"/>
+    <rect x="332" y="656" width="60" height="60" rx="15"/><rect x="432" y="656" width="60" height="60" rx="15"/>
+    <rect x="532" y="656" width="60" height="60" rx="15"/><rect x="632" y="656" width="60" height="60" rx="15"/>
+  </g>
+</svg>

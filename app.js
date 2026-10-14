@@ -362,7 +362,7 @@
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
     if (isPicking()) closePicker();
-    else if (isHome()) clearBallSelection();
+    else if (isHome()) isMenuOpen() ? closeMenu() : clearBallSelection();
     else if (isSelecting()) clearSelection();
     else if (isHistory()) closeHistory();
   });
@@ -1471,6 +1471,115 @@
   document.getElementById("cancel-project").addEventListener("click", clearBallSelection);
   document.getElementById("delete-project").addEventListener("click", deleteSelectedProject);
 
+  // Backup (the ⋯ button on Home). Projects only live in this browser's storage, so "Back up projects" saves them all
+  // to a JSON file — through the share sheet where it can (iPhone: Save to Files / iCloud Drive), else a download —
+  // and "Restore a backup" loads one back. Restoring merges: projects not here are added; ones that are keep
+  // whichever copy was changed more recently. Nothing is ever removed. The card notes when the last backup was made.
+  const BACKUP_KEY = "counter:last-backup";
+  const moreBtn = document.getElementById("home-more");
+  const backupNote = document.getElementById("backup-note");
+  const restoreFile = document.getElementById("restore-file");
+  const isMenuOpen = () => homeEl.classList.contains("is-menu");
+
+  function showLastBackup() {
+    const at = Number(localStorage.getItem(BACKUP_KEY));
+    backupNote.textContent = at ? `Last backup: ${dateFormat.format(at)}` : "Not backed up yet";
+  }
+
+  function openMenu() {
+    clearBallSelection();
+    showLastBackup();
+    homeEl.classList.add("is-menu");
+    moreBtn.setAttribute("aria-expanded", "true");
+  }
+
+  function closeMenu() {
+    homeEl.classList.remove("is-menu");
+    moreBtn.setAttribute("aria-expanded", "false");
+  }
+
+  async function backUp() {
+    const day = new Date().toISOString().slice(0, 10);
+    const data = { app: "ribbit", version: 1, exportedAt: new Date().toISOString(), projects: projects.filter((p) => !isBlank(p)) };
+    const file = new File([JSON.stringify(data, null, 2)], `ribbit-backup-${day}.json`, { type: "application/json" });
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+      } else {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(file);
+        link.download = file.name;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      }
+    } catch (err) {
+      if (err.name !== "AbortError") backupNote.textContent = "Couldn't save the backup.";
+      return; // cancelled the share sheet: not backed up
+    }
+    localStorage.setItem(BACKUP_KEY, String(Date.now()));
+    showLastBackup();
+  }
+
+  // A project from a backup file, checked and tidied like stored ones (cleanProject); null if it isn't one.
+  function importedProject(p) {
+    if (!p || typeof p !== "object" || !Array.isArray(p.entries)) return null;
+    const name = typeof p.name === "string" && p.name.trim() ? p.name.replace(/\s+/g, " ").trim().slice(0, 40) : DEFAULT_NAME;
+    const project = cleanProject({
+      id: typeof p.id === "string" && p.id ? p.id : makeProject().id,
+      name,
+      updatedAt: Number.isFinite(p.updatedAt) ? p.updatedAt : Date.now(),
+      entries: p.entries,
+      colors: p.colors,
+      ...(typeof p.color === "string" && /^#[0-9a-f]{6}$/i.test(p.color) ? { color: p.color } : {}),
+    });
+    return isBlank(project) ? null : project;
+  }
+
+  function restore(text) {
+    let list;
+    try {
+      const data = JSON.parse(text);
+      list = Array.isArray(data) ? data : data?.projects;
+    } catch {}
+    const incoming = Array.isArray(list) ? list.map(importedProject).filter(Boolean) : [];
+    if (!incoming.length) {
+      backupNote.textContent = "That file isn't a Ribbit backup.";
+      return;
+    }
+    let added = 0, updated = 0;
+    for (const p of incoming) {
+      const i = projects.findIndex((q) => q.id === p.id);
+      if (i < 0) {
+        projects.push(p);
+        added++;
+      } else if (p.updatedAt > projects[i].updatedAt) {
+        if (projects[i] === current) {
+          current = p;
+          entries = current.entries;
+        }
+        projects[i] = p;
+        updated++;
+      }
+    }
+    persistProjects();
+    refreshHome();
+    const parts = [added && `${added} added`, updated && `${updated} updated`].filter(Boolean);
+    backupNote.textContent = parts.length ? `Restored: ${parts.join(", ")}` : "Everything in that backup is already here.";
+  }
+
+  moreBtn.addEventListener("click", (e) => {
+    e.stopPropagation(); // not a "tap on empty space"
+    isMenuOpen() ? closeMenu() : openMenu();
+  });
+  document.getElementById("home-menu-backdrop").addEventListener("click", closeMenu);
+  document.getElementById("backup").addEventListener("click", backUp);
+  document.getElementById("restore").addEventListener("click", () => restoreFile.click());
+  restoreFile.addEventListener("change", async () => {
+    const file = restoreFile.files[0];
+    restoreFile.value = ""; // so picking the same file again still fires
+    if (file) restore(await file.text());
+  });
+
   // Double-tap on the dots (either mode): glide the group back to center horizontally.
   const DOUBLE_TAP_MS = 300;
   const DOUBLE_TAP_DISTANCE = 40; // px between the two taps
@@ -1521,4 +1630,11 @@
   // The app opens on Home. Wait for the label font so the curved names are measured in Geist.
   showHome();
   document.fonts?.ready.then(refreshHome);
+
+  // Offline copy for the installed app (sw.js). Service workers need http(s) on localhost or HTTPS, so this does
+  // nothing via file:// or a plain-http LAN address. Also ask the browser not to clear our storage under pressure.
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+  navigator.storage?.persist?.().catch(() => {});
 })();
