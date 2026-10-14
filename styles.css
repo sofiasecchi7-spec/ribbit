@@ -281,6 +281,8 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
   position: absolute;
   background: var(--cream);
   pointer-events: auto; /* taps on the card don't fall through to the strip */
+  touch-action: none; /* dragging the card moves the selection, never scrolls the strip */
+  cursor: grab;
 }
 
 .row-editor__squares {
@@ -476,6 +478,7 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
 .home {
   --pad-x: 32px;
   --title-mid: 41px; /* half the title's line box (Sigmar 50px): the backup button sits level with it */
+  --head: calc(max(16px, env(safe-area-inset-top)) + 2 * var(--title-mid)); /* top padding + title: the pile starts below */
   position: fixed;
   inset: 0;
   z-index: 3;
@@ -501,9 +504,14 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
 
 .is-home .home { opacity: 1; visibility: visible; transition: opacity 0.25s; }
 
+/* Left-aligned (user's request), 16px from the edge like the other screen margins (the home's side padding is
+   wider, for the pile). */
 .home__title {
+  position: relative;
+  z-index: 2; /* over the pile and its blur */
   flex: none;
-  margin: 0;
+  align-self: flex-start;
+  margin: 0 0 0 calc(max(16px, env(safe-area-inset-left)) - max(var(--pad-x), env(safe-area-inset-left)));
   font-family: "Sigmar", "Geist", sans-serif;
   font-size: 50px;
   font-weight: 400;
@@ -520,12 +528,13 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
 }
 
 /* Scrolls when the pile is taller than the screen. Bleeds to the screen's side and bottom edges so balls can
-   overhang the side padding (the first one sits 7px past it, as in the design) and scroll away off the bottom.
-   app.js positions the balls relative to .home__main. */
+   overhang the side padding (the first one sits 7px past it, as in the design) and scroll away off the bottom, and up
+   to the top edge so they pass under the title, blurred (.home__blur). app.js positions the balls relative to
+   .home__main. */
 .home__pile {
   position: absolute;
   inset:
-    0
+    calc(-1 * var(--head))
     calc(-1 * max(var(--pad-x), env(safe-area-inset-right)))
     calc(-1 * max(16px, env(safe-area-inset-bottom)))
     calc(-1 * max(var(--pad-x), env(safe-area-inset-left)));
@@ -533,10 +542,37 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
-  /* Older balls fade out under the title instead of being cut off. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
-  mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
 }
+
+/* Progressive blur behind the title (no solid fill): balls scrolling up under it blur more the higher they go — none
+   24px below the title, strongest at the top edge. Stacked layers, each blurring a little more and masked to a band
+   that starts higher up (the usual way to grade backdrop-filter). Taps pass through. */
+.home__blur {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--head) + 24px);
+  pointer-events: none;
+}
+
+.home__blur > span {
+  position: absolute;
+  inset: 0;
+  -webkit-backdrop-filter: blur(var(--b));
+  backdrop-filter: blur(var(--b));
+  -webkit-mask-image: linear-gradient(to top, transparent var(--from), #000 var(--to));
+  mask-image: linear-gradient(to top, transparent var(--from), #000 var(--to));
+}
+
+/* Graded mostly in the bottom 45% (from 24px below the title to its lower half), so the title itself sits on a
+   strong blur and the dots behind it don't compete with it. */
+.home__blur > span:nth-child(1) { --b: 1px; --from: 0%; --to: 8%; }
+.home__blur > span:nth-child(2) { --b: 2px; --from: 6%; --to: 16%; }
+.home__blur > span:nth-child(3) { --b: 4px; --from: 12%; --to: 25%; }
+.home__blur > span:nth-child(4) { --b: 8px; --from: 18%; --to: 35%; }
+.home__blur > span:nth-child(5) { --b: 16px; --from: 25%; --to: 45%; }
 
 .home__pile::-webkit-scrollbar { display: none; }
 
@@ -633,7 +669,7 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
    look as the colour picker's card). Hidden while a ball is selected. */
 .home__more {
   position: absolute;
-  z-index: 1;
+  z-index: 2;
   top: calc(max(16px, env(safe-area-inset-top)) + var(--title-mid) - 24px);
   right: max(16px, env(safe-area-inset-right));
   transition: opacity 0.2s;

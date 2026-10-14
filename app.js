@@ -840,6 +840,104 @@
     grip.addEventListener("pointercancel", end);
   }
 
+  // Moving the selection, keeping its size: w squares across (the column band's width) by h rows. Tapping a square
+  // outside it moves it there (centred on that square); dragging from inside the card moves it along square by
+  // square and row by row. Near a row's end it slides inward rather than shrinking; on a row shorter than w it takes
+  // the whole row (after a tap that becomes the new size; while dragging, the size held at the start comes back on
+  // longer rows). Long-pressing inside the card selects that whole row, like long-pressing a row anywhere.
+  const selWidth = () => Math.round((editor.e2 - editor.e1 - 12) / PITCH) + 1;
+  const selHeight = () => editor.r2 - editor.r1 + 1;
+
+  // Index of the square of `row` nearest to screen x.
+  function squareAt(row, x) {
+    const n = rowCount(row);
+    return Math.max(0, Math.min(n - 1, Math.round((x - row.getBoundingClientRect().left - 6) / PITCH)));
+  }
+
+  // Place a w × h selection with square i of display row d at its centre (for an even w, the tapped square is the
+  // left one of the middle two), kept within the row's squares and, when it fits, within the rows in view.
+  function placeSelection(d, i, w, h) {
+    const rows = rowsEl.children, row = rows[d], n = rowCount(row);
+    const ww = Math.min(w, n);
+    const a = Math.max(0, Math.min(n - ww, i - Math.floor((ww - 1) / 2)));
+    const view = rowsInView();
+    const [lo, hi] = h <= view.max - view.min + 1 ? [view.min, view.max - h + 1] : [0, rows.length - h];
+    const r1 = Math.max(lo, Math.min(hi, d - Math.floor((h - 1) / 2)));
+    const next = { r1, r2: r1 + h - 1, e1: centreOffset(a, n) - 6, e2: centreOffset(a + ww - 1, n) + 6 };
+    const changed = ["r1", "r2", "e1", "e2"].some((k) => next[k] !== editor[k]);
+    Object.assign(editor, next);
+    selectedIndex = Number(row.dataset.index);
+    for (const r of rows) r.classList.toggle("is-selected", r === row);
+    if (changed) renderGroup();
+    return changed;
+  }
+
+  // A tap on the strip while selecting: move the selection to the tapped square.
+  function moveSelectionTo(row, x) {
+    if (placeSelection([...rowsEl.children].indexOf(row), squareAt(row, x), selWidth(), selHeight())) stepFeedback();
+  }
+
+  // Screen point of the selection's centre: its middle row, and the middle of the column band (rows share one axis).
+  function selectionCentre() {
+    const r = rowsEl.getBoundingClientRect();
+    const mid = rowsEl.children[editor.r1 + Math.floor((selHeight() - 1) / 2)].getBoundingClientRect();
+    return { x: r.left + r.width / 2 + (editor.e1 + editor.e2) / 2, y: (mid.top + mid.bottom) / 2 };
+  }
+
+  // The display row nearest to screen y, limited to the rows in view.
+  function rowNear(y) {
+    const view = rowsInView();
+    let best = view.min, bestDist = Infinity;
+    for (let d = view.min; d <= view.max; d++) {
+      const r = rowsEl.children[d].getBoundingClientRect();
+      const dist = Math.abs(y - (r.top + r.bottom) / 2);
+      if (dist < bestDist) [best, bestDist] = [d, dist];
+    }
+    return best;
+  }
+
+  let cardPress = null; // { id, x, y, w, h, centre, timer, moving }
+
+  // The press is captured by the card itself (touches are otherwise held by the segment first touched, and segments
+  // are rebuilt while moving) and followed on window: capture only takes effect from the next event, and a quick
+  // first move could land on the strip and be lost (then the long-press timer fired and reselected the whole row).
+  editorCard.addEventListener("pointerdown", (e) => {
+    if (!editor || !e.isPrimary) return;
+    e.stopPropagation();
+    editorCard.setPointerCapture(e.pointerId);
+    cardPress = { id: e.pointerId, x: e.clientX, y: e.clientY, w: selWidth(), h: selHeight(), centre: selectionCentre(), moving: false };
+    cardPress.timer = setTimeout(() => {
+      const row = rowAt(cardPress.y);
+      cardPress = null;
+      if (navigator.vibrate) navigator.vibrate(15);
+      if (row) selectRow(row);
+    }, LONG_PRESS_MS);
+  });
+
+  window.addEventListener("pointermove", (e) => {
+    const press = cardPress;
+    if (!press || e.pointerId !== press.id || !editor) return;
+    const dx = e.clientX - press.x, dy = e.clientY - press.y;
+    if (!press.moving) {
+      if (Math.hypot(dx, dy) <= TAP_SLOP) return;
+      press.moving = true;
+      clearTimeout(press.timer);
+    }
+    // Where the selection's centre would be, then the square there (for an even width the centre sits half a square
+    // right of the "centre" square).
+    const tx = press.centre.x + dx - (press.w % 2 ? 0 : PITCH / 2), ty = press.centre.y + dy;
+    const d = rowNear(ty);
+    if (placeSelection(d, squareAt(rowsEl.children[d], tx), press.w, press.h)) stepFeedback();
+  });
+
+  const endCardPress = (e) => {
+    if (!cardPress || e.pointerId !== cardPress.id) return;
+    clearTimeout(cardPress.timer);
+    cardPress = null;
+  };
+  window.addEventListener("pointerup", endCardPress);
+  window.addEventListener("pointercancel", endCardPress);
+
   dotsEl.addEventListener("scroll", placeEditor);
   scrollerEl.addEventListener("scroll", placeEditor);
   window.addEventListener("resize", placeEditor);
@@ -1041,10 +1139,11 @@
     const plus = { x: plusRect.left + plusRect.width / 2 - content.left, y: plusRect.top + plusRect.height / 2 - content.top,
       r: Math.max(plusRect.width, plusRect.height) / 2 };
     const spots = pileLayout(list.length, content.width, content.height, plus);
-    // The pile bleeds past the side and bottom padding, and grows upward (scrollable) when the balls don't fit.
-    const left = content.left - pile.left;
+    // The pile bleeds past the side and bottom padding and up under the title (where it's blurred), and grows upward
+    // (scrollable) when the balls don't fit; scrolled to the top, the highest ball rests 16px below the title.
+    const left = content.left - pile.left, top = content.top - pile.top;
     const above = Math.max(0, ...spots.map((s) => 16 - (s.y - s.r))); // room needed above the content top
-    const height = above + content.height + (pile.bottom - content.bottom);
+    const height = top + above + content.height + (pile.bottom - content.bottom);
     ballsEl.style.height = `${height}px`;
     ballsEl.replaceChildren(
       ...list.map((project, i) => {
@@ -1053,7 +1152,7 @@
         item.className = "ball";
         item.dataset.id = project.id;
         // Whole pixels for crisp edges.
-        Object.assign(item.style, { left: `${Math.round(left + x - r)}px`, top: `${Math.round(above + y - r)}px`,
+        Object.assign(item.style, { left: `${Math.round(left + x - r)}px`, top: `${Math.round(top + above + y - r)}px`,
           width: `${2 * r}px`, height: `${2 * r}px` });
 
         const open = document.createElement("button");
@@ -1647,10 +1746,11 @@
     }
     if (!p || Math.hypot(e.clientX - p.x, e.clientY - p.y) > TAP_SLOP) return;
     if (isSelecting()) {
+      // Taps on the card itself never get here; a tap on any other square moves the selection there.
       const row = rowAt(e.clientY);
-      const d = row ? [...rowsEl.children].indexOf(row) : -1;
       if (!row) clearSelection();
-      else if (!editor || d < editor.r1 || d > editor.r2) selectRow(row); // tapping inside the selection keeps it
+      else if (editor) moveSelectionTo(row, e.clientX);
+      else selectRow(row);
       return;
     }
     const isDouble = lastDotsTap && e.timeStamp - lastDotsTap.t < DOUBLE_TAP_MS &&
