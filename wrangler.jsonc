@@ -1,0 +1,11 @@
+// Cloudflare Workers hosting (static files only, no server code). Cloudflare's build runs `sh build.sh`, which copies
+// the app's files into dist/, then `npx wrangler deploy` publishes just that folder — so notes and tooling
+// (CLAUDE.md, serve.py, .claude/) are never served. Without this file Cloudflare generates one that publishes the
+// whole repo.
+{
+  "name": "ribbit",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}
