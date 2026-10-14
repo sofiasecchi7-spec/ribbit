@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "counter",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["serve.py", "4422"],
+      "port": 4422
+    }
+  ]
+}

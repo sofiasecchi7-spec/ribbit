@@ -1,0 +1,795 @@
+/* Mobile-first: base styles target small screens; larger screens are enhanced via min-width queries.
+   One static background — no colour changes on tap (rapid colour changes are a photosensitivity risk). */
+
+/* Fonts bundled locally so the app looks the same on every device and works offline (both SIL OFL):
+   Sigmar for display (the "Ribbit" title, the count), Geist for everything else. */
+@font-face {
+  font-family: "Sigmar";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/sigmar-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url("fonts/geist-latin.woff2") format("woff2");
+}
+
+/* Palette from the Ribbit Figma file. */
+:root {
+  --row: 12px;      /* height of one row of dots */
+  --row-gap: 12px;
+  --bg: #f4ebd9;    /* parchment */
+  --ink: #000000;   /* display text */
+  --fg: #5c5348;    /* brown: UI text, strokes */
+  --cream: #faf4e6; /* button fills, icon on green, project balls */
+  --green: #4a9c3e;
+  --green-dark: #2f6b27;
+  --danger: #d9534a;
+  --danger-dark: #9e3029;
+  --chip: rgba(92, 83, 72, 0.12);
+  --dot: #5c5348;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: "Geist", system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+#increment {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  touch-action: none; /* app.js handles taps and the swipe-down; also no double-tap zoom */
+  display: grid;
+  place-items: center;
+}
+
+#count {
+  font-family: "Sigmar", "Geist", sans-serif;
+  font-size: clamp(120px, 40vw, 260px);
+  font-weight: 400;
+  color: var(--ink);
+  line-height: 1;
+  pointer-events: none;
+}
+
+#count.bump { animation: pop 0.22s cubic-bezier(0.3, 1.6, 0.6, 1); }
+@keyframes pop { from { transform: scale(0.9); } }
+
+/* Dots along the bottom edge, newest row on top (app.js renders rows newest-first). Default: a strip showing
+   the last 3 rows (scrolled to the top). Dragging up on it grows it with the finger (app.js sets an inline
+   height); released past a threshold it settles into history mode (body.is-history), expanded up to the top bar. */
+.dots {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  padding: 0 0 max(16px, env(safe-area-inset-bottom));
+  max-height: calc(max(16px, env(safe-area-inset-bottom)) + 3 * var(--row) + 2 * var(--row-gap));
+  /* Two nested scrollers, one axis each: .dots scrolls vertically (history mode only), .dots__scroller
+     horizontally. The browser latches each gesture to one of them, so scrolling is never diagonal. */
+  overflow-x: hidden;
+  overflow-y: hidden; /* app.js drives the vertical drag; native vertical scrolling only in history mode */
+  touch-action: pan-x; /* lets the inner scroller pan sideways; vertical moves reach app.js */
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.dots__scroller {
+  overflow-x: auto; /* rows wider than the screen scroll sideways, all together */
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.dots::-webkit-scrollbar,
+.dots__scroller::-webkit-scrollbar { display: none; }
+
+/* As wide as the widest row (at least the screen), so every row is centered on the same axis and
+   equal rows line up; overflowing rows are reachable by scrolling .dots__scroller horizontally. */
+.dots__rows {
+  position: relative; /* the selection is laid out in its coordinates */
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* each row only as wide as its dots, centred (so a selected row's card hugs its dots) */
+  gap: var(--row-gap);
+  width: max-content;
+  min-width: 100%;
+  /* Room for the group markers to the right of the rows; equal on both sides so the rows stay centred. */
+  padding: 0 max(56px, env(safe-area-inset-right)) 0 max(56px, env(safe-area-inset-left));
+}
+
+/* Hint that older rows exist below. */
+.dots.has-more {
+  -webkit-mask-image: linear-gradient(to top, transparent 0, #000 calc(max(16px, env(safe-area-inset-bottom)) + 8px));
+  mask-image: linear-gradient(to top, transparent 0, #000 calc(max(16px, env(safe-area-inset-bottom)) + 8px));
+}
+
+/* Each entry is a single line of fixed-size dots; long rows extend past the screen edges. */
+.row {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: var(--row);
+  gap: 8px;
+}
+
+/* Group markers (from app.js groupMark): runs of consecutive rows with the same count get a 1px brown line 8px to
+   the right of their squares, from the top of the run's first row to the bottom of its last, and a label 8px beside
+   the line's bottom — "13x4" (squares x rows), or just "7" for a single row. Hung off the run's bottom row, so they
+   take no space in the layout. */
+.row { position: relative; }
+
+.row__mark {
+  position: absolute;
+  left: calc(100% + 8px);
+  bottom: 0;
+  width: 1px;
+  height: calc(var(--k) * (var(--row) + var(--row-gap)) - var(--row-gap));
+  background: var(--fg);
+  pointer-events: none;
+}
+
+.row__count {
+  position: absolute;
+  left: 9px;
+  bottom: -1px;
+  transition: bottom 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+/* Closed strip: a run that continues below the last row in view shows its label beside that row instead. */
+body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--row) + var(--row-gap))); }
+
+/* Settle open / spring back after a drag (duration matches ANIM_MS in app.js). */
+.dots.is-animating {
+  transition: height 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* The count dims and blurs as the strip is pulled open (--pull goes 0 → 1, set by app.js). */
+/* Safari clips a filter to the element's box once it's on its own layer (the count is, for the drag-follow
+   translate), and the box hugs the digits — so the blur showed hard straight edges. Padding wider than the blur's
+   reach (~3 × 14px), cancelled by an equal negative margin, gives it room without moving anything. */
+#count {
+  padding: 48px;
+  margin: -48px;
+  opacity: calc(1 - var(--pull, 0) * 0.75);
+  filter: blur(calc(var(--pull, 0) * 14px));
+  transition: opacity 0.28s, filter 0.28s, translate 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.is-dragging #count, .is-swiping #count { transition: none; }
+
+/* History mode */
+.is-history .dots {
+  overflow-y: auto;
+  touch-action: pan-x pan-y;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.is-history #increment { pointer-events: none; } /* no accidental counting while browsing */
+/* Close (×) bar: hidden (but still laid out, for measuring) outside history mode.
+   Delete/Cancel bar: shown instead of it while a row is selected. */
+.bar--history, .bar--select { visibility: hidden; opacity: 0; transition: opacity 0.2s, visibility 0s 0.2s; }
+.is-history:not(.is-selecting) .bar--history,
+.is-selecting .bar--select { visibility: visible; opacity: 1; transition: opacity 0.2s; }
+
+/* Row selection (long-press): the selected squares pop out into the row editor (below); the row itself, and all
+   the other rows, stay as they are underneath. */
+.dots { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* Selection (row editor): the selected squares on a cream card, drawn over where they are in the strip (same size,
+   fades in). The rows stay in the strip underneath. The card is one segment per selected row, each hugging that row's
+   selected squares (4px all round, so it never covers a neighbouring excluded square; the grips sit on its edges), joined into one shape: segments
+   meet halfway across the row gaps, only outer corners are rounded (7px), and one shared shadow. Positions are in
+   #dot-rows' own coordinates; app.js sets the editor's left/top (#dot-rows' corner on screen) and everything inside. */
+.row-editor {
+  position: fixed;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.row-editor[hidden] { display: none; }
+
+.row-editor__stage {
+  position: absolute;
+  left: 0;
+  top: 0;
+  animation: editor-in 0.15s ease-out;
+}
+
+@keyframes editor-in { from { opacity: 0; } }
+
+.row-editor__card { filter: drop-shadow(0 3px 5px rgba(92, 83, 72, 0.28)); }
+
+.row-editor__seg {
+  position: absolute;
+  background: var(--cream);
+  pointer-events: auto; /* taps on the card don't fall through to the strip */
+}
+
+.row-editor__squares {
+  position: absolute;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+
+/* Grips: a short brown bar on the card's edge — upright on the sides, flat on the top and bottom — centred on a 44px
+   touch area. */
+.row-editor__grip {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px; /* app.js gives the bar's centre */
+  pointer-events: auto;
+  touch-action: none; /* drags move the selection's edge, never scroll the strip */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.row-editor__grip--left,
+.row-editor__grip--right { cursor: ew-resize; }
+.row-editor__grip--top,
+.row-editor__grip--bottom { cursor: ns-resize; }
+
+.row-editor__grip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 12px;
+  margin: -6px 0 0 -1.5px;
+  border-radius: 2px;
+  background: var(--fg);
+}
+
+.row-editor__grip--top::after,
+.row-editor__grip--bottom::after { width: 12px; height: 3px; margin: -1.5px 0 0 -6px; }
+
+/* Each touch area reaches outward from the card (36px out, 8px in), so the four never overlap — even on a selection
+   one row tall or one square wide, where centred areas covered each other's bars. The bar stays on the edge. */
+.row-editor__grip--left { margin: -22px 0 0 -36px; }
+.row-editor__grip--left::after { left: 36px; }
+.row-editor__grip--right { margin: -22px 0 0 -8px; }
+.row-editor__grip--right::after { left: 8px; }
+.row-editor__grip--top { margin: -36px 0 0 -22px; }
+.row-editor__grip--top::after { top: 36px; }
+.row-editor__grip--bottom { margin: -8px 0 0 -22px; }
+.row-editor__grip--bottom::after { top: 8px; }
+
+/* Each "dot" is a 12px square with softly rounded corners (used everywhere: strip, history, ball previews). */
+.dot {
+  flex: none;
+  width: var(--row);
+  height: var(--row);
+  border-radius: 3px;
+  background: var(--dot);
+}
+
+.row--new .dot {
+  animation: dot-in 0.3s cubic-bezier(0.3, 1.6, 0.6, 1) backwards;
+  animation-delay: calc(min(var(--i), 40) * 20ms);
+}
+
+@keyframes dot-in { from { transform: scale(0); opacity: 0; } }
+
+/* Controls sit at the top (the dots strip owns the bottom edge). */
+.bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: max(24px, env(safe-area-inset-top));
+  z-index: 2;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 16px;
+}
+
+/* Chunky buttons (Figma "Icon button" style): 1px border with a 3px bottom edge; pressing sinks them. */
+.chip {
+  height: 56px;
+  min-width: 56px;
+  padding: 0 22px;
+  border-radius: 999px;
+  border: 1px solid var(--fg);
+  border-bottom-width: 3px;
+  background: var(--cream);
+  color: var(--fg);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.chip--primary { background: var(--green); border-color: var(--green-dark); color: var(--cream); padding: 0 28px; }
+.chip--danger { background: var(--danger); border-color: var(--danger-dark); color: var(--cream); }
+
+.chip:active, .pill--round:active { border-bottom-width: 1px; transform: translateY(2px); }
+.chip:focus-visible, .icon-button:focus-visible, #increment:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+/* Floating pills on the main screen: round back button (top left), project title (top centre). */
+.pill {
+  position: fixed;
+  top: max(24px, env(safe-area-inset-top));
+  z-index: 2;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--fg);
+  border-bottom-width: 3px;
+  border-radius: 999px;
+  background: var(--cream);
+  color: var(--fg);
+  transition: opacity 0.2s, visibility 0s;
+}
+
+.pill--round {
+  left: max(16px, env(safe-area-inset-left));
+  width: 48px;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+
+.pill--title {
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 2 * (max(16px, env(safe-area-inset-left)) + 48px + 12px));
+  padding: 0 20px;
+}
+
+/* Top right: a circle filled with the dot colour, with the same chunky border as the other buttons (from .pill).
+   Opens the colour picker. */
+.pill--dot {
+  right: max(16px, env(safe-area-inset-right));
+  width: 48px;
+  padding: 0;
+  background: var(--dot);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.pill--dot:active { border-bottom-width: 1px; transform: translateY(2px); }
+
+.pill--title { font: inherit; cursor: pointer; touch-action: manipulation; }
+.pill--title:active { border-bottom-width: 1px; transform: translate(-50%, 2px); }
+
+#project-title {
+  font-weight: 700;
+  font-size: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pill:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+/* The pills give way to the close × (history) and Cancel/Delete (row selected). */
+.is-history .pill,
+.is-selecting .pill { opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0s 0.2s; }
+
+/* Main + button: an 80px green face with an extra-thick dark green rim, 3px around and 7px at the bottom
+   (86×90 overall). Pressing sinks it onto its bottom edge. */
+.icon-button {
+  width: 86px;
+  height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 3px solid var(--green-dark);
+  border-bottom-width: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.icon-button:active { border-bottom-width: 3px; transform: translateY(4px); }
+.home__new:active { transform: translate(-50%, 4px); }
+
+.icon-button img { display: block; flex: none; }
+
+/* Home (Figma "Home screen"): the app opens here. Title on top, the pile of project balls resting on the
+   + button at the bottom. It covers the counter and fades away when a project is opened. */
+.home {
+  --pad-x: 32px;
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding:
+    max(16px, env(safe-area-inset-top))
+    max(var(--pad-x), env(safe-area-inset-right))
+    max(48px, env(safe-area-inset-bottom))
+    max(var(--pad-x), env(safe-area-inset-left));
+  /* The rename screen's blue (#7fa8c9) rising from the bottom: 55% at the bottom edge (a bit stronger than the 39%
+     that shows above the keyboard when renaming), easing out (∝ distance², like Figma's progressive blur) by 62% of
+     the way up. */
+  background:
+    linear-gradient(to top, rgba(127, 168, 201, 0.55) 0%, rgba(127, 168, 201, 0.309) 15.5%,
+      rgba(127, 168, 201, 0.1375) 31%, rgba(127, 168, 201, 0.034) 46.5%, rgba(127, 168, 201, 0) 62%),
+    var(--bg);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s, visibility 0s 0.25s;
+}
+
+.is-home .home { opacity: 1; visibility: visible; transition: opacity 0.25s; }
+
+.home__title {
+  flex: none;
+  margin: 0;
+  font-family: "Sigmar", "Geist", sans-serif;
+  font-size: 50px;
+  font-weight: 400;
+  line-height: normal;
+  color: var(--ink);
+  transition: opacity 0.2s;
+}
+
+.home__main {
+  position: relative;
+  flex: 1 0 0;
+  min-height: 0;
+  width: 100%;
+}
+
+/* Scrolls when the pile is taller than the screen. Bleeds to the screen's side and bottom edges so balls can
+   overhang the side padding (the first one sits 7px past it, as in the design) and scroll away off the bottom.
+   app.js positions the balls relative to .home__main. */
+.home__pile {
+  position: absolute;
+  inset:
+    0
+    calc(-1 * max(var(--pad-x), env(safe-area-inset-right)))
+    calc(-1 * max(48px, env(safe-area-inset-bottom)))
+    calc(-1 * max(var(--pad-x), env(safe-area-inset-left)));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  /* Older balls fade out under the title instead of being cut off. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
+}
+
+.home__pile::-webkit-scrollbar { display: none; }
+
+.home__balls {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.home__new {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+/* A project: cream ball with a soft shade behind (no outline), its name curved along the bottom edge. */
+/* Size and position are set by app.js (204px for the newest, smaller for older ones). */
+.ball {
+  position: absolute;
+  transition: opacity 0.2s;
+}
+
+.ball__open {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 1px solid var(--fg); /* the chunky button border: 1px, 3px at the bottom */
+  border-bottom-width: 3px;
+  border-radius: 50%;
+  background: var(--cream); /* the same "white" as the buttons */
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  transition: transform 0.2s cubic-bezier(0.3, 1.6, 0.6, 1);
+}
+
+.ball__open:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+/* Dots preview: the middle of the project's pile at full dot size, centred and
+   clipped at the inside edge of the ball's border. The curved name sits on a solid label (.ball__band) that's
+   clipped the same way, so it runs into the border. */
+.ball__preview {
+  position: absolute;
+  inset: 0; /* the padding box: inside the border */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--row-gap);
+  border-radius: 50%;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* The name and its label are drawn over the whole ball, border included (the 204-unit viewBox). */
+.ball__label,
+.ball__band {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: calc(100% + 2px);
+  height: calc(100% + 4px);
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Solid label behind the name: a cream tab rising from the rim, brown line on its top edge and sides only.
+   Geometry and line width are set by app.js (drawBand). */
+.ball__band-fill { fill: var(--cream); }
+.ball__band-edge { fill: none; stroke: var(--fg); stroke-linejoin: round; }
+
+.ball__label text {
+  font-family: "Geist", system-ui, sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  fill: var(--fg);
+}
+
+/* Long-press selection: the selected ball lifts, the others fade; Cancel/Delete replace the title. */
+.home.is-selecting .ball:not(.is-selected) { opacity: 0.3; }
+.ball.is-selected .ball__open { transform: scale(1.04); }
+.home.is-selecting .home__title { opacity: 0; }
+
+.home__select { visibility: hidden; opacity: 0; transition: opacity 0.2s, visibility 0s 0.2s; }
+.home.is-selecting .home__select { visibility: visible; opacity: 1; transition: opacity 0.2s; }
+
+/* Rename (Figma node 121:4266): an opaque layer over the counter holding the question and the name field, kept
+   16px above the on-screen keyboard (--kb is the keyboard height, set by app.js from visualViewport).
+   Background matched to the Figma render: parchment lightened by the design's blurred cream dot grid (#f8f0e2),
+   then blue #7fa8c9 whose opacity grows with the square of the distance down the screen (Figma's progressive
+   background blur) — about 39% where the keyboard starts. */
+.rename {
+  position: fixed;
+  inset: 0;
+  z-index: 4;
+  margin: 0;
+  background:
+    linear-gradient(to bottom, rgba(127, 168, 201, 0) 0%, rgba(127, 168, 201, 0.0625) 25%,
+      rgba(127, 168, 201, 0.25) 50%, rgba(127, 168, 201, 0.5625) 75%, #7fa8c9 100%),
+    #f8f0e2;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s, visibility 0s 0.2s;
+}
+
+.is-renaming .rename { opacity: 1; visibility: visible; transition: opacity 0.2s; }
+
+.rename__panel {
+  position: absolute;
+  left: max(24px, env(safe-area-inset-left));
+  right: max(24px, env(safe-area-inset-right));
+  bottom: calc(var(--kb, 0px) + max(16px, env(safe-area-inset-bottom)));
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rename__question {
+  max-width: 261px; /* breaks after "What shall", as in the design */
+  margin: 0;
+  font-family: "Sigmar", "Geist", sans-serif;
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 40px;
+  color: var(--ink);
+}
+
+.rename__row { display: flex; gap: 16px; }
+
+.rename__input {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 48px;
+  padding: 4px 24px;
+  border: 1px solid var(--fg);
+  border-bottom-width: 2px;
+  border-radius: 24px;
+  background: var(--cream);
+  color: var(--fg); /* typed text: full brown, darker than the placeholder */
+  caret-color: var(--green);
+  font: inherit;
+  font-size: 20px;
+  font-weight: 600;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.rename__input::placeholder { color: rgba(92, 83, 72, 0.64); opacity: 1; }
+
+/* Figma "Icon button small": 48px cream circle, 1px border with a 2px bottom edge, 24px icon. */
+.icon-button-small {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--fg);
+  border-bottom-width: 2px;
+  border-radius: 40px;
+  background: var(--cream);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.icon-button-small:active { border-bottom-width: 1px; transform: translateY(1px); }
+.icon-button-small:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.icon-button-small img { display: block; flex: none; }
+.icon-button-small .icon-check,
+.rename.is-filled .icon-button-small .icon-x { display: none; }
+.rename.is-filled .icon-button-small .icon-check { display: block; }
+
+/* Colour picker: a full-width card under the top pills with a saturation/brightness gradient panel and a
+   hue strip. A transparent backdrop catches taps outside (closes it, never counts). --hue, --picked are set by
+   app.js. */
+.picker {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  visibility: hidden;
+  transition: visibility 0s 0.2s;
+}
+
+.is-picking .picker { visibility: visible; transition: none; }
+
+.picker__backdrop { position: absolute; inset: 0; }
+
+.picker__card {
+  position: absolute;
+  top: calc(max(24px, env(safe-area-inset-top)) + 48px + 12px);
+  right: max(16px, env(safe-area-inset-right));
+  left: max(16px, env(safe-area-inset-left)); /* full page width, same 16px gutter as the pills */
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--fg);
+  border-bottom-width: 3px;
+  border-radius: 24px;
+  background: var(--cream);
+  transform-origin: calc(100% - 24px) 0;
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity 0.2s, transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.is-picking .picker__card { opacity: 1; transform: none; }
+
+.picker__sv,
+.picker__hue {
+  position: relative;
+  border: 1px solid var(--fg);
+  touch-action: none; /* drags pick colours, never scroll */
+  cursor: crosshair;
+  outline: none;
+}
+
+.picker__sv {
+  height: 200px;
+  border-radius: 16px;
+  background:
+    linear-gradient(to top, #000, rgba(0, 0, 0, 0)),
+    linear-gradient(to right, #fff, hsl(var(--hue, 0) 100% 50%));
+}
+
+.picker__hue {
+  height: 28px;
+  border-radius: 14px;
+  background: linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+
+.picker__thumb {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+#picker-sv-thumb { background: var(--picked); }
+#picker-hue-thumb { top: 50%; background: hsl(var(--hue, 0) 100% 50%); }
+/* Swatches: each colour used in this project's rows, a 34px circle with a flat 1px brown border (no thicker
+   bottom edge), in a 44px tap area. The one matching the picked colour gets a ring. */
+.picker__used[hidden] { display: none; }
+
+.picker__label {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.picker__swatches { display: flex; flex-wrap: wrap; margin: -5px; } /* lines the circles up with the panel edge */
+
+.picker__swatch {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.picker__swatch::before {
+  content: "";
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--fg);
+  border-radius: 50%;
+  background: var(--swatch);
+}
+
+.picker__swatch.is-selected::before { box-shadow: 0 0 0 2px var(--cream), 0 0 0 4px var(--fg); }
+.picker__swatch:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; border-radius: 12px; }
+
+.picker__sv:focus-visible, .picker__hue:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+
+/* Hidden switch toggled by app.js to get the iPhone's haptic tick (see hapticTick). */
+.haptic {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
