@@ -120,18 +120,76 @@
         return row;
       })
     );
+    renderTags();
     const recent = entries.slice(-VISIBLE_ROWS);
     dotsEl.setAttribute("aria-label", recent.length ? `Recent entries: ${recent.join(", ")}` : "No entries yet");
     dotsEl.classList.toggle("has-more", entries.length > VISIBLE_ROWS);
     if (keepScroll) {
       dotsEl.scrollTop = top;
       scrollerEl.scrollLeft = left;
-      return;
+    } else {
+      scrollDotsToLatest();
+      // Rows wider than the screen overflow both edges; start centered.
+      centerDots(false);
     }
-    scrollDotsToLatest();
-    // Rows wider than the screen overflow both edges; start centered.
-    centerDots(false);
+    updateTags();
   }
+
+  // Goalpost tags: a group's marker (line + "13x4") hangs off its rows, so on long rows — the strip stays centred — it
+  // can be off the screen. Then a tag pinned to that screen edge shows its label, pointed toward the marker; tapping
+  // it glides the strip over to the marker (double-tap the dots to re-centre), and once the marker is in view the tag
+  // goes away. Tags live in #dot-tags, outside the sideways scroller: they scroll up/down with the rows but stay on
+  // the screen's edge. Not on the Home previews.
+  const tagsEl = document.getElementById("dot-tags");
+  const TAG_EDGE = 8; // a marker closer than this to a screen edge counts as out of view
+  let tags = []; // { mark, el } per group marker
+
+  function renderTags() {
+    tags = [...rowsEl.querySelectorAll(".row__mark")].map((mark) => {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "dot-tag";
+      el.textContent = mark.textContent;
+      el.setAttribute("aria-label", `Show ${mark.textContent}`);
+      el.style.setProperty("--y", `${mark.parentElement.offsetTop}px`); // level with the row's top (not above the strip)
+      const lift = mark.style.getPropertyValue("--lift");
+      if (lift) el.style.setProperty("--lift", lift);
+      return { mark, el };
+    });
+    tagsEl.replaceChildren(...tags.map((t) => t.el));
+  }
+
+  // Show a tag while its marker is off screen: its label past the right edge, or its line past the left one.
+  function updateTags() {
+    for (const { mark, el } of tags) {
+      const line = mark.getBoundingClientRect(), label = mark.firstChild.getBoundingClientRect();
+      const side = label.right > window.innerWidth - TAG_EDGE ? "right" : line.left < TAG_EDGE ? "left" : "";
+      el.classList.toggle("is-shown", side !== "");
+      if (side) el.classList.toggle("dot-tag--left", side === "left"); // fading out, it keeps its side
+      el.dataset.side = side;
+    }
+  }
+
+  let tagsFrame = 0;
+  const scheduleTags = () => {
+    if (!tagsFrame) tagsFrame = requestAnimationFrame(() => {
+      tagsFrame = 0;
+      updateTags();
+    });
+  };
+  scrollerEl.addEventListener("scroll", scheduleTags, { passive: true });
+  window.addEventListener("resize", scheduleTags);
+
+  // Tap a tag: glide sideways until its marker is in view, 16px from the edge.
+  tagsEl.addEventListener("click", (e) => {
+    const tag = tags.find((t) => t.el === e.target.closest(".dot-tag"));
+    if (!tag?.el.dataset.side) return;
+    const line = tag.mark.getBoundingClientRect(), label = tag.mark.firstChild.getBoundingClientRect();
+    const by = tag.el.dataset.side === "left" ? line.left - 16 : label.right - (window.innerWidth - 16);
+    scrollerEl.scrollBy({ left: by, behavior: "smooth" });
+  });
+  // A tap on a tag is not a tap, long-press or drag on the dots.
+  for (const type of ["pointerdown", "pointerup", "touchstart"]) tagsEl.addEventListener(type, (e) => e.stopPropagation());
 
   // Group marker: a thin line to the right of a run of k equal rows (top of its first row to bottom of its last),
   // with "n x k" beside its bottom — or just "n" for a single row. Positioned by CSS from the run's bottom row.
@@ -1139,9 +1197,8 @@
     const plus = { x: plusRect.left + plusRect.width / 2 - content.left, y: plusRect.top + plusRect.height / 2 - content.top,
       r: Math.max(plusRect.width, plusRect.height) / 2 };
     const spots = pileLayout(list.length, content.width, content.height, plus);
-    // The pile bleeds past the side and bottom padding and up under the title (where it's blurred), and grows upward
-    // (scrollable) when the balls don't fit; scrolled to the top, the highest ball rests 16px below the title.
-    const left = content.left - pile.left, top = content.top - pile.top;
+    // The pile bleeds past the side and bottom padding, and grows upward (scrollable) when the balls don't fit.
+    const left = content.left - pile.left, top = content.top - pile.top; // top: 0 (the pile starts below the title)
     const above = Math.max(0, ...spots.map((s) => 16 - (s.y - s.r))); // room needed above the content top
     const height = top + above + content.height + (pile.bottom - content.bottom);
     ballsEl.style.height = `${height}px`;
