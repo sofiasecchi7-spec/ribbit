@@ -168,12 +168,13 @@ body {
 /* Closed strip: a run that continues below the last row in view shows its label beside that row instead. */
 body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--row) + var(--row-gap))); }
 
-/* Goalpost tags (app.js updateTags): when a group's marker is off screen (long rows run past the edges while the
-   strip stays centred), a tag pinned to that screen edge shows its label, pointed toward the marker — a cream body
-   with the brown line and a pointed end (a rotated square, ::after), its own soft shadow so it reads over squares.
-   Its tip sits 8px from the edge. They live in .dot-tags, outside the sideways scroller: they scroll up and down with
-   the rows but stay on the edge. --y (the row's top: a tag can't poke out above the strip, whose edge clips it) and
-   --lift (as for the label) are set by app.js. Tapping one glides the strip over to the marker. */
+/* Goalpost tag (app.js updateTags): when a group's marker is off screen (long rows run past the edges while the
+   strip stays centred), a tag pinned to that screen edge shows its label, pointed toward the marker — only one at a
+   time, for the group nearest the current (newest) line. Its shape is one SVG outline (app.js drawTag: a fully round
+   end and a point, so no seams), cream with the 1px brown line and its own soft shadow so it reads over the squares
+   it covers; the tip sits 8px from the edge. Tags live in .dot-tags, outside the sideways scroller: they scroll up
+   and down with the rows but stay on the edge. --y (centred on the label's row, never above the strip, whose edge
+   would clip it) and --lift (as for the label) are set by app.js. Tapping one glides the strip over to the marker. */
 .dot-tags {
   position: absolute;
   top: 0;
@@ -186,19 +187,17 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
 .dot-tag {
   position: absolute;
   top: var(--y);
-  right: calc(max(8px, env(safe-area-inset-right)) + 10px);
-  height: 20px;
+  right: max(8px, env(safe-area-inset-right));
+  height: 28px;
   display: flex;
   align-items: center;
-  padding: 0 11px 0 8px; /* the point reaches ~10px into the body */
-  border: 1px solid var(--fg);
-  border-right: 0;
-  border-radius: 6px 0 0 6px;
-  background: var(--cream);
+  padding: 0 24px 0 12px; /* the point takes the last 12px */
+  border: 0;
+  background: none;
   color: var(--fg);
   font: inherit;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   filter: drop-shadow(0 1px 3px rgba(92, 83, 72, 0.35));
@@ -212,37 +211,31 @@ body:not(.is-history) .row__count { bottom: calc(-1px + var(--lift, 0) * (var(--
 body:not(.is-history) .dot-tag { top: calc(var(--y) - var(--lift, 0) * (var(--row) + var(--row-gap))); }
 .dot-tag.is-shown { opacity: 1; pointer-events: auto; }
 
-.dot-tag::after {
-  content: "";
+.dot-tag__shape {
   position: absolute;
-  top: 50%;
-  right: 0;
-  width: 14px; /* its diagonal ≈ the tag's height */
-  height: 14px;
-  border-top: 1px solid var(--fg);
-  border-right: 1px solid var(--fg);
-  background: var(--cream);
-  transform: translate(50%, -50%) rotate(45deg);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
 }
+
+.dot-tag__shape path {
+  fill: var(--cream);
+  stroke: var(--fg);
+  stroke-width: 1px;
+  stroke-linejoin: round;
+}
+
+.dot-tag__text { position: relative; }
 
 /* Marker off the left edge (scrolled far right): the mirror image, pinned to the left edge. */
 .dot-tag--left {
   right: auto;
-  left: calc(max(8px, env(safe-area-inset-left)) + 10px);
-  padding: 0 8px 0 11px;
-  border-right: 1px solid var(--fg);
-  border-left: 0;
-  border-radius: 0 6px 6px 0;
+  left: max(8px, env(safe-area-inset-left));
+  padding: 0 12px 0 24px;
 }
 
-.dot-tag--left::after {
-  right: auto;
-  left: 0;
-  border: 0;
-  border-bottom: 1px solid var(--fg);
-  border-left: 1px solid var(--fg);
-  transform: translate(-50%, -50%) rotate(45deg);
-}
+.dot-tag--left .dot-tag__shape { transform: scaleX(-1); }
 
 /* Settle open / spring back after a drag (duration matches ANIM_MS in app.js). */
 .dots.is-animating {

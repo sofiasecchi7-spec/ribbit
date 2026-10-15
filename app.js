@@ -135,49 +135,82 @@
     updateTags();
   }
 
-  // Goalpost tags: a group's marker (line + "13x4") hangs off its rows, so on long rows — the strip stays centred — it
+  // Goalpost tag: a group's marker (line + "13x4") hangs off its rows, so on long rows — the strip stays centred — it
   // can be off the screen. Then a tag pinned to that screen edge shows its label, pointed toward the marker; tapping
   // it glides the strip over to the marker (double-tap the dots to re-centre), and once the marker is in view the tag
-  // goes away. Tags live in #dot-tags, outside the sideways scroller: they scroll up/down with the rows but stay on
-  // the screen's edge. Not on the Home previews.
+  // goes away. Only one shows at a time: the group nearest the current (newest) line among the rows in view whose
+  // marker is off screen. Tags live in #dot-tags, outside the sideways scroller: they scroll up/down with the rows but
+  // stay on the screen's edge. Not on the Home previews.
   const tagsEl = document.getElementById("dot-tags");
   const TAG_EDGE = 8; // a marker closer than this to a screen edge counts as out of view
-  let tags = []; // { mark, el } per group marker
+  const TAG_H = 28, TAG_POINT = 12;
+  let tags = []; // { mark, el } per group marker, top row first
 
   function renderTags() {
     tags = [...rowsEl.querySelectorAll(".row__mark")].map((mark) => {
       const el = document.createElement("button");
       el.type = "button";
       el.className = "dot-tag";
-      el.textContent = mark.textContent;
       el.setAttribute("aria-label", `Show ${mark.textContent}`);
-      el.style.setProperty("--y", `${mark.parentElement.offsetTop}px`); // level with the row's top (not above the strip)
+      const shape = document.createElementNS(SVG_NS, "svg");
+      shape.setAttribute("class", "dot-tag__shape");
+      shape.setAttribute("aria-hidden", "true");
+      shape.appendChild(document.createElementNS(SVG_NS, "path"));
+      const text = document.createElement("span");
+      text.className = "dot-tag__text";
+      text.textContent = mark.textContent;
+      el.append(shape, text);
+      // Centred on the label's row (row top + 6px), but never above the strip's top edge.
+      el.style.setProperty("--y", `${Math.max(0, mark.parentElement.offsetTop + 6 - TAG_H / 2)}px`);
       const lift = mark.style.getPropertyValue("--lift");
       if (lift) el.style.setProperty("--lift", lift);
       return { mark, el };
     });
     tagsEl.replaceChildren(...tags.map((t) => t.el));
+    for (const { el } of tags) drawTag(el);
   }
 
-  // Show a tag while its marker is off screen: its label past the right edge, or its line past the left one.
+  // The tag's outline as one path (no seams): a fully round end on the left, a point on the right (mirrored by CSS
+  // for a left tag). Half-px insets keep the 1px line crisp.
+  function drawTag(el) {
+    const w = el.offsetWidth, h = TAG_H, r = h / 2;
+    const svg = el.firstChild;
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    svg.firstChild.setAttribute("d",
+      `M ${r} 0.5 H ${w - TAG_POINT} L ${w - 0.5} ${r} L ${w - TAG_POINT} ${h - 0.5} H ${r} A ${r - 0.5} ${r - 0.5} 0 0 1 ${r} 0.5 Z`);
+  }
+
+  // Show the one tag for the group nearest the current line (top first) whose marker is off screen — its label past
+  // the right edge, or its line past the left one — among the groups whose label is in the strip's view.
   function updateTags() {
-    for (const { mark, el } of tags) {
-      const line = mark.getBoundingClientRect(), label = mark.firstChild.getBoundingClientRect();
+    const view = dotsEl.getBoundingClientRect();
+    let shown = null;
+    for (const t of tags) {
+      const line = t.mark.getBoundingClientRect(), label = t.mark.firstChild.getBoundingClientRect();
       const side = label.right > window.innerWidth - TAG_EDGE ? "right" : line.left < TAG_EDGE ? "left" : "";
-      el.classList.toggle("is-shown", side !== "");
-      if (side) el.classList.toggle("dot-tag--left", side === "left"); // fading out, it keeps its side
-      el.dataset.side = side;
+      const inView = label.bottom > view.top && label.top < view.bottom;
+      if (!shown && side && inView) {
+        shown = t;
+        t.el.classList.toggle("dot-tag--left", side === "left");
+      }
+      t.el.dataset.side = side;
     }
+    for (const t of tags) t.el.classList.toggle("is-shown", t === shown);
   }
 
-  let tagsFrame = 0;
+  // Updated on the next frame, and once more when scrolling has stopped: after a smooth glide the last frame's update
+  // could miss the final position, leaving the tag hidden.
+  let tagsFrame = 0, tagsSettle = 0;
   const scheduleTags = () => {
     if (!tagsFrame) tagsFrame = requestAnimationFrame(() => {
       tagsFrame = 0;
       updateTags();
     });
+    clearTimeout(tagsSettle);
+    tagsSettle = setTimeout(updateTags, 150);
   };
   scrollerEl.addEventListener("scroll", scheduleTags, { passive: true });
+  dotsEl.addEventListener("scroll", scheduleTags, { passive: true }); // history: which rows are in view
   window.addEventListener("resize", scheduleTags);
 
   // Tap a tag: glide sideways until its marker is in view, 16px from the edge.
@@ -267,6 +300,7 @@
   }
 
   function setHeight(h, overshoot) {
+    scheduleTags(); // the rows in view change
     dotsEl.style.maxHeight = "none";
     dotsEl.style.height = `${h}px`;
     dotsEl.style.transform = overshoot ? `translateY(${-overshoot}px)` : "";
