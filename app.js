@@ -4,7 +4,7 @@
   const CURRENT_KEY = "counter:current-project";
   const DEFAULT_NAME = "New project";
   const DEFAULT_DOT = "#5c5348"; // dot colour until one is picked
-  const VISIBLE_ROWS = 3;
+  const VISIBLE_ROWS = 8; // rows in the closed dots strip (--visible-rows in styles.css)
 
   const countEl = document.getElementById("count");
   const dotsEl = document.getElementById("dots");

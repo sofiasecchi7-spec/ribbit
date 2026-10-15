@@ -23,6 +23,7 @@
 :root {
   --row: 12px;      /* height of one row of dots */
   --row-gap: 12px;
+  --visible-rows: 8; /* rows in the closed dots strip (VISIBLE_ROWS in app.js) */
   --bg: #f4ebd9;    /* parchment */
   --ink: #000000;   /* display text */
   --fg: #5c5348;    /* brown: UI text, strokes */
@@ -63,9 +64,19 @@ body {
   touch-action: none; /* app.js handles taps and the swipe-down; also no double-tap zoom */
   display: grid;
   place-items: center;
+  /* The count sits centred in the free space between the top pills and the closed dots strip (padding only shifts the
+     count; the whole screen still takes taps). */
+  padding:
+    calc(max(16px, env(safe-area-inset-top)) + 48px)
+    0
+    calc(max(16px, env(safe-area-inset-bottom)) + var(--visible-rows) * var(--row) + (var(--visible-rows) - 1) * var(--row-gap));
 }
 
 #count {
+  /* Optical centring: Sigmar's digits sit 0.067em below the middle of their line box (measured: tall ascender room
+     above them), so lift them to put the digits themselves on the midpoint. */
+  position: relative;
+  top: -0.067em;
   font-family: "Sigmar", "Geist", sans-serif;
   font-size: clamp(120px, 40vw, 260px);
   font-weight: 400;
@@ -78,7 +89,7 @@ body {
 @keyframes pop { from { transform: scale(0.9); } }
 
 /* Dots along the bottom edge, newest row on top (app.js renders rows newest-first). Default: a strip showing
-   the last 3 rows (scrolled to the top). Dragging up on it grows it with the finger (app.js sets an inline
+   the last --visible-rows rows (8; scrolled to the top; VISIBLE_ROWS in app.js matches). Dragging up on it grows it with the finger (app.js sets an inline
    height); released past a threshold it settles into history mode (body.is-history), expanded up to the top bar. */
 .dots {
   position: fixed;
@@ -87,7 +98,7 @@ body {
   right: 0;
   z-index: 1;
   padding: 0 0 max(16px, env(safe-area-inset-bottom));
-  max-height: calc(max(16px, env(safe-area-inset-bottom)) + 3 * var(--row) + 2 * var(--row-gap));
+  max-height: calc(max(16px, env(safe-area-inset-bottom)) + var(--visible-rows) * var(--row) + (var(--visible-rows) - 1) * var(--row-gap));
   /* Two nested scrollers, one axis each: .dots scrolls vertically (history mode only), .dots__scroller
      horizontally. The browser latches each gesture to one of them, so scrolling is never diagonal. */
   overflow-x: hidden;
