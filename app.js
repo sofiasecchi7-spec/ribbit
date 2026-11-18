@@ -1251,7 +1251,7 @@
         open.className = "ball__open";
         const total = project.entries.reduce((a, b) => a + b, 0);
         open.setAttribute("aria-label", `${project.name}, ${project.entries.length} rows, ${total} dots`);
-        open.append(ballPreview(project, 2 * r), ballLabel(project));
+        open.append(ballPreview(project), ballLabel(project));
         item.appendChild(open);
         return item;
       })
@@ -1259,27 +1259,52 @@
     for (const text of ballsEl.querySelectorAll("text")) fitLabel(text);
   }
 
-  // Preview inside a ball: the middle of the project's dots pile, laid out like the counter's strip (same 12px
-  // dots and gaps, newest row on top, each row in its own colour), centred in the
-  // ball and clipped by it. Only the rows and dots that can show are built: the middle slice of rows, and long rows
-  // cut down to their middle dots (same parity, so the visible dots sit exactly where they would in the full row).
-  function ballPreview(project, size) {
+  // Preview inside a ball: the project's newest rows (up to BAR_MAX, newest on top) as thick rounded bars — a
+  // small bar chart, no clusters of little shapes (those can trigger trypophobia). Drawn in the ball's 204-unit
+  // viewBox, so it scales with the ball. Lengths: 20 units per square like the strip, compressed when the longest
+  // shown row wouldn't fit BAR_LEN; each bar also stays inside the ball. A recoloured row shows its colours as
+  // stretches of the bar (hard-stop gradient).
+  const BAR_MAX = 4, BAR_H = 16, BAR_GAP = 8, BAR_LEN = 132, BAR_MID = 92, BAR_PAD = 18;
+
+  function ballPreview(project) {
     const preview = document.createElement("div");
     preview.className = "ball__preview";
-    const rows = project.entries.slice().reverse();
-    let shown = Math.min(rows.length, Math.ceil(size / 24) + 1); // 12px row + 12px gap
-    if ((rows.length - shown) % 2) shown++; // keep the slice centred on the pile's middle
-    const start = (rows.length - shown) / 2;
-    const maxDots = Math.ceil(size / 20) + 2; // 12px dot + 8px gap
-    preview.append(
-      ...rows.slice(start, start + shown).map((n, j) => {
-        const cut = n > maxDots ? maxDots + ((n - maxDots) % 2) : n;
-        const color = project.colors[rows.length - 1 - (start + j)];
-        const skip = (n - cut) / 2; // a cut row shows its middle squares
-        return buildRow(cut, Array.isArray(color) ? color.slice(skip, skip + cut) : color);
-      })
-    );
-    preview.appendChild(ballBand());
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("class", "ball__bars");
+    svg.setAttribute("viewBox", `0 0 ${BALL} ${BALL}`);
+    svg.setAttribute("aria-hidden", "true");
+    const n = project.entries.length;
+    const shown = project.entries.slice(Math.max(0, n - BAR_MAX)).reverse(); // newest first
+    const k = Math.min(20, BAR_LEN / Math.max(1, ...shown)); // units per square
+    const c = BALL / 2, R = c - 1;
+    let y = BAR_MID - (shown.length * BAR_H + (shown.length - 1) * BAR_GAP) / 2;
+    shown.forEach((count, j) => {
+      const far = Math.max(Math.abs(y - c), Math.abs(y + BAR_H - c)); // the bar's edge farthest from the centre
+      const room = 2 * Math.sqrt(Math.max(0, R * R - far * far)) - 2 * BAR_PAD;
+      const w = Math.max(BAR_H, Math.min(room, count * k - 0.4 * k));
+      const bar = document.createElementNS(SVG_NS, "rect");
+      Object.entries({ x: c - w / 2, y, width: w, height: BAR_H, rx: 4 }).forEach(([a, v]) => bar.setAttribute(a, v));
+      const color = project.colors[n - 1 - j];
+      if (Array.isArray(color)) {
+        const grad = document.createElementNS(SVG_NS, "linearGradient");
+        grad.id = `ball-bar-${project.id}-${j}`;
+        color.forEach((hex, i) => {
+          for (const at of [i / color.length, (i + 1) / color.length]) {
+            const stop = document.createElementNS(SVG_NS, "stop");
+            stop.setAttribute("offset", at);
+            stop.setAttribute("stop-color", hex);
+            grad.appendChild(stop);
+          }
+        });
+        svg.appendChild(grad);
+        bar.setAttribute("fill", `url(#${grad.id})`);
+      } else {
+        bar.setAttribute("fill", color);
+      }
+      svg.appendChild(bar);
+      y += BAR_H + BAR_GAP;
+    });
+    preview.append(svg, ballBand());
     return preview;
   }
 

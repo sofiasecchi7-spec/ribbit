@@ -416,7 +416,7 @@ body:not(.is-history) .dot-tag { top: calc(var(--y) - var(--lift, 0) * (var(--ro
 .row-editor__grip--bottom { margin: -8px 0 0 -22px; }
 .row-editor__grip--bottom::after { top: 18px; }
 
-/* Each "dot" is a 12px square with softly rounded corners (used everywhere: strip, history, ball previews). */
+/* Each "dot" is a 12px square with softly rounded corners (strip and history). */
 .dot {
   flex: none;
   width: var(--row);
@@ -668,17 +668,12 @@ body:not(.is-history) .dot-tag { top: calc(var(--y) - var(--lift, 0) * (var(--ro
 
 .ball__open:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
 
-/* Dots preview: the middle of the project's pile at full dot size, centred and
-   clipped at the inside edge of the ball's border. The curved name sits on a solid label (.ball__band) that's
-   clipped the same way, so it runs into the border. */
+/* Preview: the newest rows as thick bars (.ball__bars, drawn by app.js), clipped at the inside edge of the
+   ball's border. The curved name sits on a solid label (.ball__band) that's clipped the same way, so it runs
+   into the border. */
 .ball__preview {
   position: absolute;
   inset: 0; /* the padding box: inside the border */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--row-gap);
   border-radius: 50%;
   overflow: hidden;
   pointer-events: none;
@@ -686,6 +681,7 @@ body:not(.is-history) .dot-tag { top: calc(var(--y) - var(--lift, 0) * (var(--ro
 
 /* The name and its label are drawn over the whole ball, border included (the 204-unit viewBox). */
 .ball__label,
+.ball__bars,
 .ball__band {
   position: absolute;
   top: -1px;

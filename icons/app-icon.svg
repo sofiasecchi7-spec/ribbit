@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <!-- App icon (source for icons/icon-*.png): a project ball with a few rows of dots on Home's parchment-to-blue
-       background. Full bleed and everything inside the central 80% circle, so it also works as a maskable icon. -->
+  <!-- App icon (source for icons/icon-*.png): a chunky green frog face, drawn like the + button (green face over a
+       dark green rim that shows more at the bottom), on Home's parchment-to-blue background. Full bleed and
+       everything inside the central 80% circle, so it also works as a maskable icon. -->
   <defs>
     <linearGradient id="sky" x1="0" y1="1" x2="0" y2="0">
       <stop offset="0" stop-color="#7fa8c9" stop-opacity="0.55"/>
@@ -9,24 +10,34 @@
       <stop offset="0.465" stop-color="#7fa8c9" stop-opacity="0.034"/>
       <stop offset="0.62" stop-color="#7fa8c9" stop-opacity="0"/>
     </linearGradient>
+    <g id="head">
+      <ellipse cx="512" cy="560" rx="318" ry="226"/>
+      <circle cx="350" cy="362" r="118"/>
+      <circle cx="674" cy="362" r="118"/>
+    </g>
   </defs>
   <rect width="1024" height="1024" fill="#f4ebd9"/>
   <rect width="1024" height="1024" fill="url(#sky)"/>
-  <!-- Chunky border: brown disc peeking out more at the bottom, cream face on top. -->
-  <circle cx="512" cy="524" r="352" fill="#5c5348"/>
-  <circle cx="512" cy="506" r="340" fill="#faf4e6"/>
-  <g fill="#5c5348">
-    <g fill="#4a9c3e">
-      <rect x="332" y="296" width="60" height="60" rx="15"/><rect x="432" y="296" width="60" height="60" rx="15"/>
-      <rect x="532" y="296" width="60" height="60" rx="15"/><rect x="632" y="296" width="60" height="60" rx="15"/>
-    </g>
-    <rect x="282" y="416" width="60" height="60" rx="15"/><rect x="382" y="416" width="60" height="60" rx="15"/>
-    <rect x="482" y="416" width="60" height="60" rx="15"/><rect x="582" y="416" width="60" height="60" rx="15"/>
-    <rect x="682" y="416" width="60" height="60" rx="15"/>
-    <rect x="282" y="536" width="60" height="60" rx="15"/><rect x="382" y="536" width="60" height="60" rx="15"/>
-    <rect x="482" y="536" width="60" height="60" rx="15"/><rect x="582" y="536" width="60" height="60" rx="15"/>
-    <rect x="682" y="536" width="60" height="60" rx="15"/>
-    <rect x="332" y="656" width="60" height="60" rx="15"/><rect x="432" y="656" width="60" height="60" rx="15"/>
-    <rect x="532" y="656" width="60" height="60" rx="15"/><rect x="632" y="656" width="60" height="60" rx="15"/>
+  <!-- Rim: the head, grown 12 units and dropped 16, in dark green; the face on top. -->
+  <use href="#head" transform="translate(0 16)" fill="#2f6b27" stroke="#2f6b27" stroke-width="24" stroke-linejoin="round"/>
+  <use href="#head" fill="#4a9c3e"/>
+  <!-- Eyes: cream whites, brown pupils looking slightly inward, a cream glint. -->
+  <g fill="#faf4e6">
+    <circle cx="350" cy="356" r="74"/>
+    <circle cx="674" cy="356" r="74"/>
   </g>
+  <g fill="#5c5348">
+    <circle cx="364" cy="370" r="38"/>
+    <circle cx="660" cy="370" r="38"/>
+  </g>
+  <g fill="#faf4e6">
+    <circle cx="378" cy="354" r="12"/>
+    <circle cx="674" cy="354" r="12"/>
+  </g>
+  <!-- Cheeks and a wide smile. -->
+  <g fill="#f4a3a0" opacity="0.85">
+    <ellipse cx="300" cy="590" rx="54" ry="34"/>
+    <ellipse cx="724" cy="590" rx="54" ry="34"/>
+  </g>
+  <path d="M 384 584 Q 512 690 640 584" fill="none" stroke="#2f6b27" stroke-width="22" stroke-linecap="round"/>
 </svg>
